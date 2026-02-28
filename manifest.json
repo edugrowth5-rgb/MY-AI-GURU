@@ -9,13 +9,13 @@
   "theme_color": "#00d2ff",
   "icons": [
     {
-      "src": "favicon.png",
+      "src": "AIguru.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "favicon.png",
+      "src": "AIguru.png",
       "sizes": "512x512",
       "type": "image/png"
     }
