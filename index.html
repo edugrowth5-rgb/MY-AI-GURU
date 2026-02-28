@@ -105,7 +105,7 @@
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('Asw.js')
+            navigator.serviceWorker.register('sw.js')
                 .then(reg => console.log('Gyan Magic Live!'))
                 .catch(err => console.log('PWA not supported locally'));
         });
