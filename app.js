@@ -4,6 +4,15 @@ const display = document.getElementById('display');
 const userInput = document.getElementById('userInput');
 let isCameraOn = false;
 
+// --- Tablet/Mobile Keyboard Fix (Naya Addition) ---
+// Isse keyboard khulne par layout dabega nahi
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        document.body.style.height = window.visualViewport.height + 'px';
+        display.scrollTop = display.scrollHeight; // Auto scroll on keyboard open
+    });
+}
+
 // --- Settings Control ---
 function openSettings() {
     document.getElementById('settingsModal').style.display = 'block';
@@ -34,7 +43,6 @@ async function handleCamera() {
             video.srcObject = stream;
             video.style.display = 'block';
             isCameraOn = true;
-            // Scroll to top to see camera clearly on Tablet
             display.scrollTop = 0;
         } catch (err) {
             alert("Camera Error: Please use HTTPS or check permissions.");
@@ -113,7 +121,6 @@ async function askAI(query) {
             let reply = data.candidates[0].content.parts[0].text.replace(/\*\*/g, "");
             addMessage("Guru", reply);
             
-            // Auto Voice Response
             const msg = new SpeechSynthesisUtterance(reply);
             msg.lang = /[\u0900-\u097F]/.test(reply) ? 'hi-IN' : 'en-US';
             window.speechSynthesis.speak(msg);
