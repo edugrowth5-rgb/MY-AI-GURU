@@ -4,12 +4,11 @@ const display = document.getElementById('display');
 const userInput = document.getElementById('userInput');
 let isCameraOn = false;
 
-// --- Tablet/Mobile Keyboard Fix (Naya Addition) ---
-// Isse keyboard khulne par layout dabega nahi
+// --- Tablet/Mobile Keyboard Fix ---
 if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
         document.body.style.height = window.visualViewport.height + 'px';
-        display.scrollTop = display.scrollHeight; // Auto scroll on keyboard open
+        display.scrollTop = display.scrollHeight; 
     });
 }
 
@@ -33,7 +32,16 @@ function saveKey() {
     }
 }
 
-// --- Camera & Mic Fix (HTTPS is Required) ---
+// --- NEW: Erase Key Function ---
+function eraseKey() {
+    if(confirm("Kya aap API Key ko permanent mitaana chahte hain?")) {
+        localStorage.removeItem('user_gemini_key');
+        document.getElementById('apiKeyInput').value = "";
+        alert("Key Erased! Ab naya key daalein.");
+    }
+}
+
+// --- Camera & Mic Fix ---
 async function handleCamera() {
     if (!isCameraOn) {
         try {
@@ -87,7 +95,7 @@ function startVoice() {
     rec.start();
 }
 
-// --- Main AI Brain ---
+// --- Main AI Brain (Updated with Error Handling) ---
 async function askAI(query) {
     const key = localStorage.getItem('user_gemini_key');
     if(!key) return openSettings();
@@ -95,7 +103,7 @@ async function askAI(query) {
     const text = query || userInput.value.trim();
     if(!text) return;
 
-    addMessage("You", text);
+    if(!query) addMessage("You", text);
     userInput.value = "";
 
     const loader = document.createElement('p');
@@ -115,19 +123,27 @@ async function askAI(query) {
         });
 
         const data = await res.json();
-        document.getElementById('loader').remove();
+        if(document.getElementById('loader')) document.getElementById('loader').remove();
 
-        if(data.candidates) {
+        // Check for API Errors
+        if(data.error) {
+            addMessage("Guru", "API Error: " + data.error.message);
+            return;
+        }
+
+        if(data.candidates && data.candidates[0].content) {
             let reply = data.candidates[0].content.parts[0].text.replace(/\*\*/g, "");
             addMessage("Guru", reply);
             
             const msg = new SpeechSynthesisUtterance(reply);
             msg.lang = /[\u0900-\u097F]/.test(reply) ? 'hi-IN' : 'en-US';
             window.speechSynthesis.speak(msg);
+        } else {
+            addMessage("Guru", "AI ne koi jawab nahi diya. Check API Key.");
         }
     } catch (e) {
         if(document.getElementById('loader')) document.getElementById('loader').remove();
-        addMessage("Guru", "Network error! Check Key or Internet.");
+        addMessage("Guru", "Network error! Internet check karein.");
     }
 }
 
