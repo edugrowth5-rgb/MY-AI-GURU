@@ -4,7 +4,7 @@ const urlsToCache = [
   '/index.html',
   '/style.css',
   '/app.js',
-  '/favicon.png',
+  '/AIguru.png',
   '/manifest.json'
 ];
 
