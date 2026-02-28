@@ -1,44 +1,43 @@
-// --- CONFIGURATION & VARIABLES ---
-let video = document.getElementById('camera-preview');
-let display = document.getElementById('display');
+// --- Global Elements ---
+const video = document.getElementById('camera-preview');
+const display = document.getElementById('display');
+const userInput = document.getElementById('userInput');
 let isCameraOn = false;
 
-// --- 1. SETTINGS & API KEY LOGIC ---
-function openSettings() { 
-    document.getElementById('settingsModal').style.display = 'block'; 
+// --- Settings Control ---
+function openSettings() {
+    document.getElementById('settingsModal').style.display = 'block';
     const savedKey = localStorage.getItem('user_gemini_key');
     if(savedKey) document.getElementById('apiKeyInput').value = savedKey;
 }
 
-function closeSettings() { 
-    document.getElementById('settingsModal').style.display = 'none'; 
+function closeSettings() {
+    document.getElementById('settingsModal').style.display = 'none';
 }
 
 function saveKey() {
-    let key = document.getElementById('apiKeyInput').value.trim();
+    const key = document.getElementById('apiKeyInput').value.trim();
     if(key) {
         localStorage.setItem('user_gemini_key', key);
-        alert("Success! Key save ho gayi hai.");
+        alert("Key Saved! Ab aap sawal puch sakte hain.");
         closeSettings();
-    } else {
-        alert("Kripya ek valid API Key daalein.");
     }
 }
 
-// --- 2. CAMERA & PHOTO (OCR) LOGIC ---
+// --- Camera & Mic Fix (HTTPS is Required) ---
 async function handleCamera() {
     if (!isCameraOn) {
         try {
-            // Mobile users ke liye back camera (environment) prefer karein
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: "environment" } 
             });
             video.srcObject = stream;
             video.style.display = 'block';
             isCameraOn = true;
-            addMessage("System", "Camera ON! Photo lene ke liye dobara 📷 dabayein.");
-        } catch (err) { 
-            alert("Camera Access Denied! Settings mein jaakar allow karein."); 
+            // Scroll to top to see camera clearly on Tablet
+            display.scrollTop = 0;
+        } catch (err) {
+            alert("Camera Error: Please use HTTPS or check permissions.");
         }
     } else {
         takePhoto();
@@ -52,131 +51,86 @@ async function takePhoto() {
     canvas.height = video.videoHeight;
     context.drawImage(video, 0, 0);
 
-    // Camera band karein taaki battery bache
     const stream = video.srcObject;
-    if(stream) stream.getTracks().forEach(track => track.stop());
+    if(stream) stream.getTracks().forEach(t => t.stop());
     video.style.display = 'none';
     isCameraOn = false;
 
-    addMessage("Guru", "Reading your notebook... 📖");
+    addMessage("Guru", "Reading your notes... 📖");
 
     try {
-        // Tesseract Library se photo ko text mein badlein
         const result = await Tesseract.recognize(canvas, 'eng+hin');
-        let text = result.data.text.trim();
-        if(text) {
-            addMessage("You (Photo)", text);
-            askAI(text);
-        } else {
-            addMessage("Guru", "Maaf kijiye, photo saaf nahi hai. Kripya dobara kheenchiye.");
+        if(result.data.text.trim()) {
+            askAI(result.data.text.trim());
         }
-    } catch (e) { 
-        addMessage("Guru", "OCR Error: Text padhne mein samasya hui."); 
+    } catch (e) {
+        addMessage("Guru", "Photo saaf nahi hai, try again.");
     }
 }
 
-// --- 3. VOICE (MICROPHONE) LOGIC ---
 function startVoice() {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if(!SpeechRec) { 
-        alert("Aapka browser voice support nahi karta. Chrome use karein."); 
-        return; 
-    }
+    if(!SpeechRec) return alert("Browser voice support nahi karta.");
     
     const rec = new SpeechRec();
-    rec.lang = 'hi-IN'; // Hindi aur English dono support karega
-    
-    rec.onstart = () => { 
-        addMessage("System", "Suniye... 👂 Boliye!"); 
-    };
-
-    rec.onresult = (e) => {
-        let transcript = e.results[0][0].transcript;
-        document.getElementById('userInput').value = transcript;
-        askAI(transcript);
-    };
-
-    rec.onerror = (err) => { 
-        console.error(err);
-        alert("Mic Error: Permission check karein."); 
-    };
-
+    rec.lang = 'hi-IN';
+    rec.onstart = () => addMessage("System", "Boliye, main sun raha hoon... 👂");
+    rec.onresult = (e) => askAI(e.results[0][0].transcript);
     rec.start();
 }
 
-// --- 4. MAIN AI BRAIN (GEMINI API) ---
+// --- Main AI Brain ---
 async function askAI(query) {
-    const USER_KEY = localStorage.getItem('user_gemini_key');
-    
-    if(!USER_KEY) {
-        addMessage("Guru", "⚠️ Pehle Settings (⚙️) mein apni Gemini API Key daalein!");
-        openSettings();
-        return;
-    }
+    const key = localStorage.getItem('user_gemini_key');
+    if(!key) return openSettings();
 
-    let input = document.getElementById('userInput');
-    let text = query || input.value.trim();
+    const text = query || userInput.value.trim();
     if(!text) return;
 
-    if(!query) addMessage("You", text);
-    input.value = "";
+    addMessage("You", text);
+    userInput.value = "";
 
-    // Loading indicator
-    let loading = document.createElement('p');
-    loading.id = "temp-load";
-    loading.innerHTML = "<i style='color:cyan'>Gyan Magic is thinking... ✨</i>";
-    display.appendChild(loading);
-
-    // System Prompt for Student Teacher behavior
-    const prompt = `You are Gyan Magic AI, a personal study tutor.
-    - If the student asks in Hindi or about Hindi grammar, answer in Hindi.
-    - For Math, Science, or English, answer in English with simple steps.
-    - Keep it educational and encouraging.
-    Question: ${text}`;
+    const loader = document.createElement('p');
+    loader.id = "loader";
+    loader.style.color = "cyan";
+    loader.innerHTML = "✨ Guru is thinking...";
+    display.appendChild(loader);
+    display.scrollTop = display.scrollHeight;
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${USER_KEY}`, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: "Explain simply: " + text }] }]
+            })
         });
 
-        const data = await response.json();
-        if(document.getElementById('temp-load')) document.getElementById('temp-load').remove();
+        const data = await res.json();
+        document.getElementById('loader').remove();
 
-        if (data.candidates && data.candidates[0].content) {
-            let reply = data.candidates[0].content.parts[0].text.replace(/\*\*/g, ""); // Remove bold stars
-            
-            // Language Detection for Voice
-            let isHindi = /[\u0900-\u097F]/.test(reply);
-            
+        if(data.candidates) {
+            let reply = data.candidates[0].content.parts[0].text.replace(/\*\*/g, "");
             addMessage("Guru", reply);
-            speak(reply, isHindi ? 'hi-IN' : 'en-US');
-        } else {
-            addMessage("Guru", "API Error: Kripya apni API key check karein.");
+            
+            // Auto Voice Response
+            const msg = new SpeechSynthesisUtterance(reply);
+            msg.lang = /[\u0900-\u097F]/.test(reply) ? 'hi-IN' : 'en-US';
+            window.speechSynthesis.speak(msg);
         }
-    } catch (err) {
-        if(document.getElementById('temp-load')) document.getElementById('temp-load').remove();
-        addMessage("Guru", "Network Error: Check internet or API Key.");
+    } catch (e) {
+        if(document.getElementById('loader')) document.getElementById('loader').remove();
+        addMessage("Guru", "Network error! Check Key or Internet.");
     }
 }
 
-// --- 5. HELPER FUNCTIONS ---
 function addMessage(sender, msg) {
-    let div = document.createElement('div');
-    div.style.margin = "10px";
-    div.style.padding = "15px";
-    div.style.borderRadius = "15px";
-    div.style.background = sender === "You" || sender === "You (Photo)" ? "rgba(255,255,255,0.1)" : "rgba(0, 210, 255, 0.1)";
-    div.style.textAlign = sender.startsWith("You") ? "right" : "left";
+    const div = document.createElement('div');
+    div.style.padding = "12px";
+    div.style.margin = "8px 0";
+    div.style.borderRadius = "12px";
+    div.style.background = sender === "Guru" ? "rgba(0,210,255,0.15)" : "rgba(255,255,255,0.1)";
     div.innerHTML = `<b>${sender}:</b> ${msg}`;
     display.appendChild(div);
     display.scrollTop = display.scrollHeight;
-}
-
-function speak(text, lang) {
-    window.speechSynthesis.cancel(); // Purani awaz band karein
-    let msg = new SpeechSynthesisUtterance(text);
-    msg.lang = lang;
-    window.speechSynthesis.speak(msg);
 }
